@@ -2,88 +2,93 @@ package jm.task.core.jdbc.dao;
 
 import jm.task.core.jdbc.model.User;
 import jm.task.core.jdbc.util.Util;
+import org.hibernate.HibernateException;
 import org.hibernate.Session;
-import org.hibernate.Transaction;
+import org.hibernate.SessionFactory;
+
 import java.util.List;
 
 public class UserDaoHibernateImpl implements UserDao {
+    private static final SessionFactory sessionFactory = Util.getSessionFactory();
+
+    public UserDaoHibernateImpl() {
+    }
 
     @Override
     public void createUsersTable() {
         String sql = "CREATE TABLE IF NOT EXISTS users (" +
                 "id SERIAL PRIMARY KEY, " +
-                "name VARCHAR(50), " +
-                "lastName VARCHAR(50), " +
-                "age SMALLINT)";
-        executeSQL(sql);
+                "name VARCHAR(50) NOT NULL, " +
+                "lastName VARCHAR(50) NOT NULL, " +
+                "age SMALLINT NOT NULL)";
+        try (Session session = sessionFactory.openSession()) {
+            session.beginTransaction();
+            session.createSQLQuery(sql).executeUpdate();
+            session.getTransaction().commit();
+        } catch (HibernateException e) {
+            throw new RuntimeException("Ошибка при создании таблицы: " + e.getMessage());
+        }
     }
 
     @Override
     public void dropUsersTable() {
         String sql = "DROP TABLE IF EXISTS users";
-        executeSQL(sql);
+        try (Session session = sessionFactory.openSession()) {
+            session.beginTransaction();
+            session.createSQLQuery(sql).executeUpdate();
+            session.getTransaction().commit();
+        } catch (HibernateException e) {
+            throw new RuntimeException("Ошибка при удалении таблицы: " + e.getMessage());
+        }
     }
 
     @Override
     public void saveUser(String name, String lastName, byte age) {
-        try (Session session = Util.getSessionFactory().openSession()) {
+        try (Session session = sessionFactory.openSession()) {
             session.beginTransaction();
-            clearUsersTable();
             session.save(new User(name, lastName, age));
             session.getTransaction().commit();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-
-    public void clearUsersTable() {
-        try (Session session = Util.getSessionFactory().openSession()) {
-            session.beginTransaction();
-            session.createSQLQuery("DELETE FROM users").executeUpdate(); // Очистка таблицы
-            session.getTransaction().commit();
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (HibernateException e) {
+            throw new RuntimeException("Ошибка при добавлении пользователя: " + e.getMessage());
         }
     }
 
     @Override
     public void removeUserById(long id) {
-        Transaction transaction = null;
-        try (Session session = Util.getSessionFactory().openSession()) {
-            transaction = session.beginTransaction();
+        try (Session session = sessionFactory.openSession()) {
+            session.beginTransaction();
             User user = session.get(User.class, id);
             if (user != null) {
                 session.delete(user);
             }
-            transaction.commit();
-        } catch (Exception e) {
-            if (transaction != null) transaction.rollback();
-            e.printStackTrace();
+            session.getTransaction().commit();
+        } catch (HibernateException e) {
+            throw new RuntimeException("Ошибка при удалении пользователя: " + e.getMessage());
         }
     }
 
     @Override
     public List<User> getAllUsers() {
-        try (Session session = Util.getSessionFactory().openSession()) {
-            return session.createQuery("FROM User", User.class).list();
+        List<User> users;
+        try (Session session = sessionFactory.openSession()) {
+            session.beginTransaction();
+            users = session.createQuery("FROM User", User.class).list();
+            session.getTransaction().commit();
+        } catch (HibernateException e) {
+            throw new RuntimeException("Ошибка при получении списка пользователей: " + e.getMessage());
         }
+        return users;
     }
 
     @Override
     public void cleanUsersTable() {
-        String sql = "DELETE FROM users";
-        executeSQL(sql);
-    }
-
-    private void executeSQL(String sql) {
-        Transaction transaction = null;
-        try (Session session = Util.getSessionFactory().openSession()) {
-            transaction = session.beginTransaction();
-            session.createNativeQuery(sql).executeUpdate();
-            transaction.commit();
-        } catch (Exception e) {
-            if (transaction != null) transaction.rollback();
-            e.printStackTrace();
+        String sql = "TRUNCATE TABLE users RESTART IDENTITY";
+        try (Session session = sessionFactory.openSession()) {
+            session.beginTransaction();
+            session.createSQLQuery(sql).executeUpdate();
+            session.getTransaction().commit();
+        } catch (HibernateException e) {
+            throw new RuntimeException("Ошибка при очистке таблицы: " + e.getMessage());
         }
     }
 }
