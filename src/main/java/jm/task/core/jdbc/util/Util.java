@@ -1,37 +1,44 @@
 package jm.task.core.jdbc.util;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
+import org.hibernate.SessionFactory;
+import org.hibernate.cfg.Configuration;
+import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
+import org.hibernate.service.ServiceRegistry;
+import jm.task.core.jdbc.model.User;
+import org.hibernate.internal.util.config.ConfigurationException;
 
 public class Util {
-    private static final String URL = "jdbc:postgresql://localhost:5432/users_data";
-    private static final String USER = "postgres";
-    private static final String PASSWORD = "Pussya_135";
-    private static Connection connection = null;
 
-    public static Connection getConnection() {
+    private static final SessionFactory sessionFactory = buildSessionFactory();
 
+    private static SessionFactory buildSessionFactory() {
         try {
-            Class.forName("org.postgresql.Driver");
-            connection = DriverManager.getConnection(URL, USER, PASSWORD);
-            System.out.println("Соединение с БД установлено");
-        } catch (ClassNotFoundException | SQLException e) {
+            Configuration configuration = new Configuration();
+            configuration.addAnnotatedClass(User.class);
+            configuration.setProperty("hibernate.dialect", "org.hibernate.dialect.PostgreSQLDialect");
+            configuration.setProperty("hibernate.hbm2ddl.auto", "update");
+            configuration.setProperty("hibernate.show_sql", "true");
+            configuration.setProperty("hibernate.connection.driver_class", "org.postgresql.Driver");
+            configuration.setProperty("hibernate.connection.url", "jdbc:postgresql://localhost:5432/users_data");
+            configuration.setProperty("hibernate.connection.username", "postgres");
+            configuration.setProperty("hibernate.connection.password", "Pussya_135");
+
+            ServiceRegistry serviceRegistry = new StandardServiceRegistryBuilder()
+                    .applySettings(configuration.getProperties()).build();
+
+            return configuration.buildSessionFactory(serviceRegistry);
+
+        } catch (ConfigurationException e) {
             e.printStackTrace();
-            System.out.println("Ошибка подключения к БД");
+            throw new RuntimeException("Failed to create SessionFactory", e);
         }
-        return connection;
     }
 
-    public static void closeConnection() {
-        if (connection != null) {
-            try {
-                connection.close();
-                System.out.println("Соединение с БД закрыто");
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
-        }
+    public static SessionFactory getSessionFactory() {
+        return sessionFactory;
+    }
+
+    public static void shutdown() {
+        getSessionFactory().close();
     }
 }
-
